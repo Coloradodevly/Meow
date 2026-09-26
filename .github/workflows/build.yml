@@ -1,0 +1,87 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. JDK 17 (required by Gradle & Android) ───────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ── 3. Android SDK ─────────────────────────────────────────────────
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ── 4. Install NDK r25c + CMake 3.22.1 ────────────────────────────
+      - name: Install NDK and CMake
+        run: |
+          sdkmanager "ndk;25.2.9519653" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653" >> $GITHUB_ENV
+
+      # ── 5. Bootstrap Gradle wrapper (in case jar is missing) ───────────
+      - name: Bootstrap Gradle wrapper
+        run: |
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Wrapper jar missing — bootstrapping with system gradle"
+            gradle wrapper --gradle-version 8.4
+          fi
+          chmod +x ./gradlew
+
+      # ── 6. Clone Dear ImGui ────────────────────────────────────────────
+      - name: Clone ImGui
+        run: |
+          git clone --depth=1 https://github.com/ocornut/imgui.git /tmp/imgui
+          DEST=app/src/main/jni/imgui
+          mkdir -p $DEST/backends
+          cp /tmp/imgui/imgui.h /tmp/imgui/imgui.cpp \
+             /tmp/imgui/imgui_draw.cpp /tmp/imgui/imgui_tables.cpp \
+             /tmp/imgui/imgui_widgets.cpp /tmp/imgui/imgui_internal.h \
+             /tmp/imgui/imconfig.h /tmp/imgui/imstb_rectpack.h \
+             /tmp/imgui/imstb_textedit.h /tmp/imgui/imstb_truetype.h \
+             $DEST/
+          cp /tmp/imgui/backends/imgui_impl_opengl3.h \
+             /tmp/imgui/backends/imgui_impl_opengl3.cpp \
+             /tmp/imgui/backends/imgui_impl_opengl3_loader.h \
+             $DEST/backends/
+
+      # ── 7. Clone And64InlineHook ───────────────────────────────────────
+      - name: Clone And64InlineHook
+        run: |
+          git clone --depth=1 https://github.com/Rprop/And64InlineHook.git /tmp/and64
+          cp /tmp/and64/And64InlineHook.hpp app/src/main/jni/hooks/
+
+      # ── 8. Build debug APK ─────────────────────────────────────────────
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      # ── 9. Upload APK ──────────────────────────────────────────────────
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: meow-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+      # ── 10. Upload .so as well ─────────────────────────────────────────
+      - name: Upload libmodmenu.so
+        uses: actions/upload-artifact@v4
+        with:
+          name: libmodmenu-so
+          path: app/build/intermediates/cmake/debug/obj/arm64-v8a/libmodmenu.so
+          retention-days: 7
+          if-no-files-found: warn
