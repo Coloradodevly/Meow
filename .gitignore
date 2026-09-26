@@ -20,3 +20,4 @@ app/src/main/jni/hooks/And64InlineHook.hpp
 # OS files
 .DS_Store
 Thumbs.db
+app/src/main/jni/hooks/And64InlineHook/
