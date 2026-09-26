@@ -1,0 +1,99 @@
+name: Build Mod Menu
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  # Also lets you trigger a build manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Check out your code ──────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. Install Android NDK r25c ─────────────────────────────────────
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r25c
+          add-to-path: true
+
+      # ── 3. Clone Dear ImGui into the right folder ───────────────────────
+      #    This means you don't have to commit ImGui files yourself —
+      #    the workflow fetches them automatically on every build.
+      - name: Clone ImGui
+        run: |
+          git clone --depth=1 https://github.com/ocornut/imgui.git /tmp/imgui
+
+          IMGUI_DEST=app/src/main/jni/imgui
+
+          mkdir -p $IMGUI_DEST/backends
+
+          # Core files
+          cp /tmp/imgui/imgui.h              $IMGUI_DEST/
+          cp /tmp/imgui/imgui.cpp            $IMGUI_DEST/
+          cp /tmp/imgui/imgui_draw.cpp       $IMGUI_DEST/
+          cp /tmp/imgui/imgui_tables.cpp     $IMGUI_DEST/
+          cp /tmp/imgui/imgui_widgets.cpp    $IMGUI_DEST/
+          cp /tmp/imgui/imgui_internal.h     $IMGUI_DEST/
+          cp /tmp/imgui/imconfig.h           $IMGUI_DEST/
+          cp /tmp/imgui/imstb_rectpack.h     $IMGUI_DEST/
+          cp /tmp/imgui/imstb_textedit.h     $IMGUI_DEST/
+          cp /tmp/imgui/imstb_truetype.h     $IMGUI_DEST/
+
+          # OpenGL ES backend
+          cp /tmp/imgui/backends/imgui_impl_opengl3.h          $IMGUI_DEST/backends/
+          cp /tmp/imgui/backends/imgui_impl_opengl3.cpp        $IMGUI_DEST/backends/
+          cp /tmp/imgui/backends/imgui_impl_opengl3_loader.h   $IMGUI_DEST/backends/
+
+          echo "ImGui files copied successfully."
+
+      # ── 4. Clone And64InlineHook into hooks/ ────────────────────────────
+      - name: Clone And64InlineHook
+        run: |
+          git clone --depth=1 https://github.com/Rprop/And64InlineHook.git /tmp/and64
+
+          cp /tmp/and64/And64InlineHook.hpp \
+             app/src/main/jni/hooks/And64InlineHook.hpp
+
+          echo "And64InlineHook copied successfully."
+
+      # ── 5. Configure with CMake ─────────────────────────────────────────
+      - name: Configure CMake
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          cmake \
+            -S app/src/main/jni \
+            -B build \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -G Ninja
+
+      # ── 6. Build ────────────────────────────────────────────────────────
+      - name: Build
+        run: cmake --build build --parallel
+
+      # ── 7. Show what was built ──────────────────────────────────────────
+      - name: List build output
+        run: |
+          echo "=== Build output ==="
+          find build -name "*.so" -exec ls -lh {} \;
+
+      # ── 8. Upload libmodmenu.so as a downloadable artifact ──────────────
+      - name: Upload libmodmenu.so
+        uses: actions/upload-artifact@v4
+        with:
+          name: imgui-android-mod-menu
+          path: build/libmodmenu.so
+          # Artifact is kept for 7 days — download it before then
+          retention-days: 7

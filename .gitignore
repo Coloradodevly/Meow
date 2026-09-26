@@ -1,0 +1,22 @@
+# Build output
+build/
+*.so
+*.o
+*.a
+
+# Android Studio / Gradle
+.gradle/
+.idea/
+*.iml
+local.properties
+app/build/
+
+# ImGui (fetched automatically by the workflow)
+app/src/main/jni/imgui/
+
+# And64InlineHook (fetched automatically by the workflow)
+app/src/main/jni/hooks/And64InlineHook.hpp
+
+# OS files
+.DS_Store
+Thumbs.db
