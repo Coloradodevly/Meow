@@ -66,7 +66,7 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
 
-     - name: Find and upload libmodmenu.so
+      - name: Find and upload libmodmenu.so
         run: |
           find app/build -name "libmodmenu.so" | head -5
           SO=$(find app/build -name "libmodmenu.so" -path "*/arm64-v8a/*" | head -1)
