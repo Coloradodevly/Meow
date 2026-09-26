@@ -14,7 +14,7 @@
 
 // Hooking library — this is And64InlineHook (ARM64)
 // Make sure to include it in your jni/ folder
-#include "And64InlineHook/And64InlineHook.hpp"
+#include "And64InlineHook.hpp"
 
 #define LOG_TAG "ModMenu/EGL"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
