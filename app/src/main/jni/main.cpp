@@ -10,24 +10,30 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 static void* hookThread(void*) {
-    // Wait until libEGL.so is loaded by Unity
+    // Wait for both libunity.so and libEGL.so to be loaded
+    void* libUnity = nullptr;
     void* libEGL = nullptr;
-    while (!libEGL) {
-        libEGL = dlopen("libEGL.so", RTLD_NOW | RTLD_NOLOAD);
-        if (!libEGL) {
-            LOGI("Waiting for libEGL.so...");
+
+    while (!libUnity || !libEGL) {
+        libUnity = dlopen("libunity.so", RTLD_NOW | RTLD_NOLOAD);
+        libEGL   = dlopen("libEGL.so",   RTLD_NOW | RTLD_NOLOAD);
+        if (!libUnity || !libEGL) {
+            if (libUnity) dlclose(libUnity);
+            if (libEGL)   dlclose(libEGL);
+            LOGI("Waiting for Unity+EGL...");
             sleep(1);
         }
     }
+    dlclose(libUnity);
     dlclose(libEGL);
 
-    // Give Unity a moment to finish GL init
-    sleep(2);
+    // Wait for Unity to finish GL init
+    sleep(3);
 
     if (setupEGLHook()) {
-        LOGI("EGL hook installed successfully.");
+        LOGI("EGL hook installed!");
     } else {
-        LOGE("Failed to install EGL hook!");
+        LOGE("Hook failed!");
     }
     return nullptr;
 }

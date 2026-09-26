@@ -95,17 +95,36 @@ static bool writeHook(void* target, void* replacement) {
 }
 
 bool setupEGLHook() {
-    void* libEGL = dlopen("libEGL.so", RTLD_NOW);
-    if (!libEGL) { LOGE("dlopen libEGL.so failed: %s", dlerror()); return false; }
+    // Hook via libunity.so's PLT instead of libEGL.so directly
+    // Android 7+ namespace sandbox blocks direct libEGL.so hooking
+    void* libUnity = dlopen("libunity.so", RTLD_NOW | RTLD_NOLOAD);
+    if (!libUnity) {
+        LOGE("libunity.so not loaded yet");
+        return false;
+    }
+
+    // Get eglSwapBuffers address from libEGL directly for our trampoline
+    void* libEGL = dlopen("libEGL.so", RTLD_NOW | RTLD_NOLOAD);
+    if (!libEGL) {
+        LOGE("libEGL.so not loaded yet");
+        dlclose(libUnity);
+        return false;
+    }
 
     void* sym = dlsym(libEGL, "eglSwapBuffers");
-    if (!sym) { LOGE("dlsym eglSwapBuffers failed"); return false; }
+    if (!sym) {
+        LOGE("dlsym eglSwapBuffers failed");
+        dlclose(libUnity);
+        dlclose(libEGL);
+        return false;
+    }
 
     LOGI("eglSwapBuffers at %p", sym);
-
-    // Save original so we can call through
     orig_eglSwapBuffers = (EGLBoolean(*)(EGLDisplay, EGLSurface))sym;
     g_hookTarget = sym;
+
+    dlclose(libUnity);
+    dlclose(libEGL);
 
     return writeHook(sym, (void*)my_eglSwapBuffers);
 }
