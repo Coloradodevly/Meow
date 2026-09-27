@@ -50,7 +50,21 @@ extern "C" void handleTouch(float x, float y, int action) {
 }
 
 // Our replacement function
+static int frameCount = 0;
+
 static EGLBoolean my_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
+    if (frameCount == 0) {
+        FILE* f = fopen("/storage/emulated/0/Android/data/com.MA.Polyfield/egl_called.txt", "w");
+        if (f) { fprintf(f, "eglSwapBuffers hooked!\n"); fclose(f); }
+    }
+    frameCount++;
+    if (frameCount == 1) {
+        LOGI("my_eglSwapBuffers called for first time!");
+    }
+    if (frameCount % 300 == 0) {
+        LOGI("Still hooking, frame %d", frameCount);
+    }
+
     if (!g_initialized) initImGui(display, surface);
 
     ImGuiIO& io = ImGui::GetIO();
