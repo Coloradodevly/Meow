@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "egl_hook.h"
 #include "dobby.h"
 
@@ -85,73 +84,15 @@ static uint8_t g_backup[16];
 static void*   g_hookTarget = nullptr;
 
 bool setupEGLHook() {
-    // Find eglSwapBuffers via libunity.so's PLT
-    // This bypasses Android 7+ namespace sandbox
-    void* libUnity = dlopen("libunity.so", RTLD_NOW | RTLD_NOLOAD);
-    if (!libUnity) {
-        LOGE("libunity.so not found");
-        return false;
-    }
-
-    // Get the base address of libunity.so from /proc/self/maps
-    FILE* maps = fopen("/proc/self/maps", "r");
-    if (!maps) {
-        LOGE("Cannot open /proc/self/maps");
-        dlclose(libUnity);
-        return false;
-    }
-
-    uintptr_t unityBase = 0;
-    char line[512];
-    while (fgets(line, sizeof(line), maps)) {
-        if (strstr(line, "libunity.so") && strstr(line, "r-xp")) {
-            sscanf(line, "%lx", &unityBase);
-            break;
-        }
-    }
-    fclose(maps);
-    dlclose(libUnity);
-
-    if (!unityBase) {
-        LOGE("Could not find libunity.so base address");
-        return false;
-    }
-
-    LOGI("libunity.so base: %p", (void*)unityBase);
-
-    // Use dlsym on the already-loaded libEGL via its handle from unity's namespace
-    // Try getting eglSwapBuffers through the global symbol table
-    void* sym = nullptr;
-
-    // Method: search all loaded libraries for eglSwapBuffers
-    void* global = dlopen(nullptr, RTLD_NOW | RTLD_GLOBAL);
-    if (global) {
-        sym = dlsym(global, "eglSwapBuffers");
-        dlclose(global);
-    }
-
+    void* sym = DobbySymbolResolver("libEGL.so", "eglSwapBuffers");
     if (!sym) {
-        // Fallback: open libEGL directly
-        void* libEGL = dlopen("/system/lib64/libEGL.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!libEGL) libEGL = dlopen("/system/lib64/egl/libEGL_adreno.so", RTLD_NOW | RTLD_GLOBAL);
-        if (libEGL) {
-            sym = dlsym(libEGL, "eglSwapBuffers");
-        }
-    }
-
-    if (!sym) {
-        LOGE("Cannot find eglSwapBuffers");
+        LOGE("DobbySymbolResolver failed");
         return false;
     }
-
     LOGI("eglSwapBuffers at %p", sym);
     orig_eglSwapBuffers = (EGLBoolean(*)(EGLDisplay, EGLSurface))sym;
-
-    int ret = DobbyHook(sym, (void*)my_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
-    LOGI("DobbyHook returned %d", ret);
-
-    g_hookTarget = sym;
-    return ret == 0;
+    DobbyHook(sym, (void*)my_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+    return true;
 }
 
 void removeEGLHook() {
