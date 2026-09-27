@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "egl_hook.h"
 #include "dobby.h"
 
