@@ -48,10 +48,15 @@ target_link_options(modmenu PRIVATE
     -Wl,--strip-all
 )
 
+add_library(dobby STATIC IMPORTED)
+set_target_properties(dobby PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/libs/arm64-v8a/libdobby.a)
+
 # ─── Link libraries ───────────────────────────────────────────────────────────
 target_link_libraries(modmenu
-    android    # ANativeActivity, AInputQueue, etc.
-    EGL        # eglSwapBuffers
-    GLESv3     # OpenGL ES 3
-    log        # __android_log_print
+    dobby
+    android
+    EGL
+    GLESv3
+    log
 )

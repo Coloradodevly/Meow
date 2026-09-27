@@ -1,4 +1,5 @@
 #include "egl_hook.h"
+#include "dobby.h"
 
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
@@ -68,65 +69,16 @@ static EGLBoolean my_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
 static uint8_t g_backup[16];
 static void*   g_hookTarget = nullptr;
 
-static bool writeHook(void* target, void* replacement) {
-    long pageSize = sysconf(_SC_PAGESIZE);
-    uintptr_t addr = (uintptr_t)target & ~(pageSize - 1);
-
-    if (mprotect((void*)addr, pageSize * 2, PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
-        LOGE("mprotect failed");
-        return false;
-    }
-
-    // Save original bytes
-    memcpy(g_backup, target, 16);
-
-    // Write absolute jump: LDR X17, #8; BR X17; <address>
-    uint8_t trampoline[16] = {
-        0x51, 0x00, 0x00, 0x58,  // LDR X17, #8
-        0x20, 0x02, 0x1F, 0xD6,  // BR X17
-        0, 0, 0, 0, 0, 0, 0, 0   // 64-bit address
-    };
-    uintptr_t repAddr = (uintptr_t)replacement;
-    memcpy(trampoline + 8, &repAddr, 8);
-    memcpy(target, trampoline, 16);
-
-    __builtin___clear_cache((char*)target, (char*)target + 16);
-    return true;
-}
-
 bool setupEGLHook() {
-    // Hook via libunity.so's PLT instead of libEGL.so directly
-    // Android 7+ namespace sandbox blocks direct libEGL.so hooking
-    void* libUnity = dlopen("libunity.so", RTLD_NOW | RTLD_NOLOAD);
-    if (!libUnity) {
-        LOGE("libunity.so not loaded yet");
-        return false;
-    }
-
-    // Get eglSwapBuffers address from libEGL directly for our trampoline
-    void* libEGL = dlopen("libEGL.so", RTLD_NOW | RTLD_NOLOAD);
-    if (!libEGL) {
-        LOGE("libEGL.so not loaded yet");
-        dlclose(libUnity);
-        return false;
-    }
-
-    void* sym = dlsym(libEGL, "eglSwapBuffers");
+    void* sym = DobbySymbolResolver("libEGL.so", "eglSwapBuffers");
     if (!sym) {
-        LOGE("dlsym eglSwapBuffers failed");
-        dlclose(libUnity);
-        dlclose(libEGL);
+        LOGE("DobbySymbolResolver failed");
         return false;
     }
-
     LOGI("eglSwapBuffers at %p", sym);
     orig_eglSwapBuffers = (EGLBoolean(*)(EGLDisplay, EGLSurface))sym;
-    g_hookTarget = sym;
-
-    dlclose(libUnity);
-    dlclose(libEGL);
-
-    return writeHook(sym, (void*)my_eglSwapBuffers);
+    DobbyHook(sym, (void*)my_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+    return true;
 }
 
 void removeEGLHook() {
