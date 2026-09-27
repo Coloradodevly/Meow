@@ -3,44 +3,70 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <dlfcn.h>
+#include <stdio.h>
 #include "hooks/egl_hook.h"
 
 #define LOG_TAG "ModMenu"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOG_FILE "/storage/emulated/0/Download/modmenu_log.txt"
+
+static FILE* logFile = nullptr;
+
+static void writeLog(const char* level, const char* msg) {
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "%s: %s", level, msg);
+    if (logFile) {
+        fprintf(logFile, "[%s] %s\n", level, msg);
+        fflush(logFile);
+    }
+}
+
+#define LOG(fmt, ...) do { \
+    char _buf[512]; \
+    snprintf(_buf, sizeof(_buf), fmt, ##__VA_ARGS__); \
+    writeLog("INFO", _buf); \
+} while(0)
+
+#define LOGERR(fmt, ...) do { \
+    char _buf[512]; \
+    snprintf(_buf, sizeof(_buf), fmt, ##__VA_ARGS__); \
+    writeLog("ERROR", _buf); \
+} while(0)
 
 static void* hookThread(void*) {
-    // Wait for both libunity.so and libEGL.so to be loaded
+    LOG("Hook thread started");
+
     void* libUnity = nullptr;
     void* libEGL = nullptr;
+    int attempts = 0;
 
     while (!libUnity || !libEGL) {
         libUnity = dlopen("libunity.so", RTLD_NOW | RTLD_NOLOAD);
         libEGL   = dlopen("libEGL.so",   RTLD_NOW | RTLD_NOLOAD);
+        LOG("Attempt %d: libunity=%p libEGL=%p", attempts++, libUnity, libEGL);
         if (!libUnity || !libEGL) {
             if (libUnity) dlclose(libUnity);
             if (libEGL)   dlclose(libEGL);
-            LOGI("Waiting for Unity+EGL...");
             sleep(1);
         }
     }
     dlclose(libUnity);
     dlclose(libEGL);
 
-    // Wait for Unity to finish GL init
+    LOG("Both libs loaded! Waiting 3s...");
     sleep(3);
 
+    LOG("Calling setupEGLHook...");
     if (setupEGLHook()) {
-        LOGI("EGL hook installed!");
+        LOG("EGL hook installed successfully!");
     } else {
-        LOGE("Hook failed!");
+        LOGERR("EGL hook FAILED!");
     }
     return nullptr;
 }
 
 __attribute__((constructor))
 void onLibraryLoad() {
-    LOGI("Mod menu .so loaded!");
+    logFile = fopen(LOG_FILE, "w");
+    LOG("=== Mod menu .so loaded! ===");
     pthread_t t;
     pthread_create(&t, nullptr, hookThread, nullptr);
     pthread_detach(t);
@@ -48,6 +74,7 @@ void onLibraryLoad() {
 
 __attribute__((destructor))
 void onLibraryUnload() {
-    LOGI("Mod menu .so unloaded.");
+    LOG("Mod menu .so unloaded.");
+    if (logFile) fclose(logFile);
     removeEGLHook();
 }
