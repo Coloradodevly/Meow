@@ -28,7 +28,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "include/xdl.h"
+#include "xdl.h"
 #include "xdl_iterate.h"
 #include "xdl_util.h"
 
