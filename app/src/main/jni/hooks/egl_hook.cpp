@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "egl_hook.h"
 #include "dobby.h"
+#include "xdl.h"
 
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
@@ -85,15 +86,26 @@ static uint8_t g_backup[16];
 static void*   g_hookTarget = nullptr;
 
 bool setupEGLHook() {
-    void* sym = DobbySymbolResolver("libEGL.so", "eglSwapBuffers");
-    if (!sym) {
-        LOGE("DobbySymbolResolver failed");
+    // xdl bypasses Android linker namespace restrictions
+    void* handle = xdl_open("libEGL.so", XDL_DEFAULT);
+    if (!handle) {
+        LOGE("xdl_open libEGL.so failed");
         return false;
     }
+
+    void* sym = xdl_sym(handle, "eglSwapBuffers", nullptr);
+    if (!sym) {
+        LOGE("xdl_sym eglSwapBuffers failed");
+        xdl_close(handle);
+        return false;
+    }
+
     LOGI("eglSwapBuffers at %p", sym);
     orig_eglSwapBuffers = (EGLBoolean(*)(EGLDisplay, EGLSurface))sym;
-    DobbyHook(sym, (void*)my_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
-    return true;
+    int ret = DobbyHook(sym, (void*)my_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+    LOGI("DobbyHook returned %d", ret);
+    xdl_close(handle);
+    return ret == 0;
 }
 
 void removeEGLHook() {

@@ -12,6 +12,11 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
     ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+    hooks/xdl.c
+    hooks/xdl_iterate.c
+    hooks/xdl_linker.c
+    hooks/xdl_util.c
+    hooks/xdl_lzma.c
 )
 
 # ─── Build the mod menu shared library ───────────────────────────────────────
