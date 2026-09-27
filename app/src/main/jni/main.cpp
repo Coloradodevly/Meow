@@ -7,7 +7,7 @@
 #include "hooks/egl_hook.h"
 
 #define LOG_TAG "ModMenu"
-#define LOG_FILE "/data/data/com.MA.Polyfield/modmenu_log.txt"
+#define LOG_FILE "/storage/emulated/0/Android/data/com.MA.Polyfield/modmenu_log.txt"
 
 static FILE* logFile = nullptr;
 
