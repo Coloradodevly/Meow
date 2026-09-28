@@ -17,26 +17,32 @@ static void writeLog(const char* msg) {
 
 static void* hookThread(void*) {
     writeLog("[ModMenu] Hook thread started");
+    writeLog("[ModMenu] Waiting 500ms for Unity GL context...");
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     writeLog("[ModMenu] Installing EGL hook...");
+
     if (setupEGLHook()) {
-        writeLog("[ModMenu] EGL hook installed!");
+        writeLog("[ModMenu] EGL hook installed successfully!");
+        writeLog("[ModMenu] Waiting for first frame...");
     } else {
-        writeLog("[ModMenu] EGL hook FAILED!");
+        writeLog("[ModMenu] ERROR: EGL hook FAILED!");
     }
     return nullptr;
 }
 
 __attribute__((constructor))
 void onLoad() {
-    writeLog("[ModMenu] Constructor called!");
+    writeLog("[ModMenu] ===== libModMenu.so loaded =====");
+    writeLog("[ModMenu] Constructor called — spawning hook thread");
     pthread_t t;
     pthread_create(&t, nullptr, hookThread, nullptr);
     pthread_detach(t);
+    writeLog("[ModMenu] Hook thread spawned");
 }
 
 __attribute__((destructor))
 void onUnload() {
-    writeLog("[ModMenu] Destructor called");
+    writeLog("[ModMenu] Destructor called — cleaning up");
     removeEGLHook();
+    writeLog("[ModMenu] Done.");
 }
