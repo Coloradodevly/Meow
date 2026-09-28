@@ -10,7 +10,7 @@
 #define LOG_TAG "Loader"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-#define LOG_FILE "/storage/emulated/0/Android/data/com.MA.Polyfield/loader_log.txt"
+#define LOG_FILE "/storage/emulated/0/Documents/loader_log.txt"
 
 static void writeLog(const char* msg) {
     LOGI("%s", msg);

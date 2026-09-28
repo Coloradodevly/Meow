@@ -7,6 +7,6 @@
 __attribute__((constructor))
 void onLoad() {
     LOGI("=== libModMenu.so loaded! ===");
-    FILE* f = fopen("/storage/emulated/0/Android/data/com.MA.Polyfield/modmenu_log.txt", "w");
+    FILE* f = fopen("/storage/emulated/0/Documents/modmenu_log.txt", "w");
     if (f) { fprintf(f, "ModMenu loaded!\n"); fclose(f); }
 }
