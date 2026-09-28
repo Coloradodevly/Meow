@@ -9,8 +9,9 @@
 
 #define LOG_TAG "Loader"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOG_FILE "/storage/emulated/0/Documents/loader_log.txt"
+
+static JavaVM* g_vm = nullptr;
 
 static void writeLog(const char* msg) {
     LOGI("%s", msg);
@@ -35,10 +36,28 @@ static std::string getNativeLibDir() {
     return "";
 }
 
+static void showToast(JNIEnv* env, const char* msg) {
+    jclass activityThreadClass = env->FindClass("android/app/ActivityThread");
+    jmethodID currentThread = env->GetStaticMethodID(activityThreadClass,
+        "currentActivityThread", "()Landroid/app/ActivityThread;");
+    jobject activityThread = env->CallStaticObjectMethod(activityThreadClass, currentThread);
+    jmethodID getApp = env->GetMethodID(activityThreadClass,
+        "getApplication", "()Landroid/app/Application;");
+    jobject context = env->CallObjectMethod(activityThread, getApp);
+
+    jclass toastClass = env->FindClass("android/widget/Toast");
+    jmethodID makeText = env->GetStaticMethodID(toastClass, "makeText",
+        "(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;");
+    jstring jmsg = env->NewStringUTF(msg);
+    jobject toast = env->CallStaticObjectMethod(toastClass, makeText,
+        context, jmsg, (jint)1);
+    jmethodID show = env->GetMethodID(toastClass, "show", "()V");
+    env->CallVoidMethod(toast, show);
+}
+
 static void* loaderThread(void*) {
     writeLog("[Loader] Thread started");
 
-    // Wait for libunity.so and libEGL.so
     void* libUnity = nullptr;
     void* libEGL = nullptr;
     int attempts = 0;
@@ -79,10 +98,17 @@ static void* loaderThread(void*) {
     }
 
     writeLog("[Loader] libModMenu.so loaded successfully!");
+
+    JNIEnv* env;
+    g_vm->AttachCurrentThread(&env, nullptr);
+    showToast(env, "Mod Menu loaded! Check the UI");
+    g_vm->DetachCurrentThread();
+
     return nullptr;
 }
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
+    g_vm = vm;
     writeLog("[Loader] JNI_OnLoad called");
     pthread_t t;
     pthread_create(&t, nullptr, loaderThread, nullptr);
