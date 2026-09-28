@@ -66,12 +66,29 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
 
-      - name: Find and upload libmodmenu.so
+     - name: Find and upload libraries
         run: |
-          find app/build -name "libmodmenu.so" | head -5
-          SO=$(find app/build -name "libmodmenu.so" -path "*/arm64-v8a/*" | head -1)
-          echo "Found .so at: $SO"
-          cp $SO ~/libmodmenu.so
+          find app/build -name "*.so" | grep arm64-v8a
+          LOADER=$(find app/build -name "libLoader.so" -path "*/arm64-v8a/*" | head -1)
+          MODMENU=$(find app/build -name "libModMenu.so" -path "*/arm64-v8a/*" | head -1)
+          echo "Loader: $LOADER"
+          echo "ModMenu: $MODMENU"
+          cp "$LOADER" ~/libLoader.so
+          cp "$MODMENU" ~/libModMenu.so
+
+      - name: Upload libLoader.so
+        uses: actions/upload-artifact@v4
+        with:
+          name: libLoader-so
+          path: ~/libLoader.so
+          retention-days: 7
+
+      - name: Upload libModMenu.so
+        uses: actions/upload-artifact@v4
+        with:
+          name: libModMenu-so
+          path: ~/libModMenu.so
+          retention-days: 7
 
       - name: Upload libmodmenu.so
         uses: actions/upload-artifact@v5
