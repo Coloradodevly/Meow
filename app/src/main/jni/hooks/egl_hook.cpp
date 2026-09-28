@@ -1,15 +1,13 @@
 #include <stdio.h>
 #include "egl_hook.h"
-#include "dobby.h"
+#include "../3rdparty/dobby/dobby.h"
 #include "xdl.h"
 
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
-#include <dlfcn.h>
 #include <android/log.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <string.h>
+#include <atomic>
+#include <string>
 
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
@@ -18,8 +16,15 @@
 #define LOG_TAG "ModMenu/EGL"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOG_FILE "/storage/emulated/0/Android/data/com.MA.Polyfield/modmenu_log.txt"
 
-static bool g_initialized = false;
+static void writeLog(const char* msg) {
+    LOGI("%s", msg);
+    FILE* f = fopen(LOG_FILE, "a");
+    if (f) { fprintf(f, "%s\n", msg); fflush(f); fclose(f); }
+}
+
+static std::atomic<bool> g_initialized{false};
 static EGLBoolean (*orig_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
 
 static void initImGui(EGLDisplay display, EGLSurface surface) {
@@ -40,34 +45,14 @@ static void initImGui(EGLDisplay display, EGLSurface surface) {
     style.TouchExtraPadding = ImVec2(4.f, 4.f);
 
     ImGui_ImplOpenGL3_Init("#version 300 es");
-    g_initialized = true;
-    LOGI("ImGui initialized %dx%d", width, height);
+    writeLog("[EGL] ImGui initialized!");
 }
-
-extern "C" void handleTouch(float x, float y, int action) {
-    if (!g_initialized) return;
-    ImGuiIO& io = ImGui::GetIO();
-    io.MousePos = ImVec2(x, y);
-    io.MouseDown[0] = (action == 0 || action == 2);
-}
-
-// Our replacement function
-static int frameCount = 0;
 
 static EGLBoolean my_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
-    if (frameCount == 0) {
-        FILE* f = fopen("/storage/emulated/0/Android/data/com.MA.Polyfield/egl_called.txt", "w");
-        if (f) { fprintf(f, "eglSwapBuffers hooked!\n"); fclose(f); }
+    if (!g_initialized.load()) {
+        initImGui(display, surface);
+        g_initialized.store(true);
     }
-    frameCount++;
-    if (frameCount == 1) {
-        LOGI("my_eglSwapBuffers called for first time!");
-    }
-    if (frameCount % 300 == 0) {
-        LOGI("Still hooking, frame %d", frameCount);
-    }
-
-    if (!g_initialized) initImGui(display, surface);
 
     ImGuiIO& io = ImGui::GetIO();
     io.DeltaTime = 1.0f / 60.0f;
@@ -81,44 +66,40 @@ static EGLBoolean my_eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
     return orig_eglSwapBuffers(display, surface);
 }
 
-// Simple ARM64 inline hook using raw trampolines
-static uint8_t g_backup[16];
-static void*   g_hookTarget = nullptr;
-
 bool setupEGLHook() {
-    // xdl bypasses Android linker namespace restrictions
+    writeLog("[EGL] Setting up hook via xdl...");
+
     void* handle = xdl_open("libEGL.so", XDL_DEFAULT);
     if (!handle) {
-        LOGE("xdl_open libEGL.so failed");
+        writeLog("[EGL] xdl_open failed!");
         return false;
     }
 
     void* sym = xdl_sym(handle, "eglSwapBuffers", nullptr);
+    xdl_close(handle);
+
     if (!sym) {
-        LOGE("xdl_sym eglSwapBuffers failed");
-        xdl_close(handle);
+        writeLog("[EGL] xdl_sym failed!");
         return false;
     }
 
-    LOGI("eglSwapBuffers at %p", sym);
+    char msg[128];
+    snprintf(msg, sizeof(msg), "[EGL] eglSwapBuffers at %p", sym);
+    writeLog(msg);
+
     orig_eglSwapBuffers = (EGLBoolean(*)(EGLDisplay, EGLSurface))sym;
     int ret = DobbyHook(sym, (void*)my_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
-    LOGI("DobbyHook returned %d", ret);
-    xdl_close(handle);
+
+    snprintf(msg, sizeof(msg), "[EGL] DobbyHook returned %d", ret);
+    writeLog(msg);
+
     return ret == 0;
 }
 
 void removeEGLHook() {
-    if (g_hookTarget) {
-        long pageSize = sysconf(_SC_PAGESIZE);
-        uintptr_t addr = (uintptr_t)g_hookTarget & ~(pageSize - 1);
-        mprotect((void*)addr, pageSize * 2, PROT_READ | PROT_WRITE | PROT_EXEC);
-        memcpy(g_hookTarget, g_backup, 16);
-        __builtin___clear_cache((char*)g_hookTarget, (char*)g_hookTarget + 16);
-    }
-    if (g_initialized) {
+    if (g_initialized.load()) {
         ImGui_ImplOpenGL3_Shutdown();
         ImGui::DestroyContext();
-        g_initialized = false;
+        g_initialized.store(false);
     }
 }
