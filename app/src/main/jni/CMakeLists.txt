@@ -62,6 +62,6 @@ target_link_libraries(modmenu
     dobby
     android
     EGL
-    GLESv2
+    GLESv3
     log
 )
