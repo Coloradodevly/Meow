@@ -13,10 +13,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -51,22 +51,17 @@ jobs:
              /tmp/imgui/backends/imgui_impl_opengl3_loader.h \
              $DEST/backends/
 
-      - name: Clone And64InlineHook
-        run: |
-          git clone --depth=1 https://github.com/Rprop/And64InlineHook.git /tmp/and64
-          cp /tmp/and64/And64InlineHook.hpp app/src/main/jni/hooks/
-
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: meow-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
 
-     - name: Find and upload libraries
+      - name: Find and upload libraries
         run: |
           find app/build -name "*.so" | grep arm64-v8a
           LOADER=$(find app/build -name "libLoader.so" -path "*/arm64-v8a/*" | head -1)
@@ -88,11 +83,4 @@ jobs:
         with:
           name: libModMenu-so
           path: ~/libModMenu.so
-          retention-days: 7
-
-      - name: Upload libmodmenu.so
-        uses: actions/upload-artifact@v5
-        with:
-          name: libmodmenu-so
-          path: ~/libmodmenu.so
           retention-days: 7
